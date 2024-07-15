@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assignment</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    button {
+      position: absolute;
+      bottom: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #008CBA;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+
+    #completebtn {
+      left: 40%;
+      transform: translateX(-100%);
+    }
+
+    #copybtn {
+      left: 50%;
+      transform: translateX(50%);
+    }
+
+    #resetbtn {
+      left: 60%;
+      transform: translateX(100%);
+    }
+  </style>
+</head>
+
+<body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <button id="completebtn">Complete</button>
+  <button id="copybtn">Copy</button>
+  <button id="resetbtn">Reset</button>
+  <script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(
+      window.innerWidth / -4, window.innerWidth / 4,
+      window.innerHeight / 4, window.innerHeight / -4,
+      1, 1000
+    );
+    camera.position.set(0, 0, 10);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const planegeometry = new THREE.PlaneGeometry(400, 400);
+    const planematerial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const plane = new THREE.Mesh(planegeometry, planematerial);
+    scene.add(plane);
+
+    const grid = new THREE.GridHelper(400, 50, 0x000000, 0x000000);
+    grid.rotation.x = Math.PI / 2;
+    scene.add(grid);
+
+    class PolygonStructure {
+      constructor(vertices) {
+        this.vertices = vertices;
+        this.mesh = this.createMesh();
+        scene.add(this.mesh);
+      }
+      createMesh() {
+        const shape = new THREE.Shape(this.vertices.map(v => new THREE.Vector2(v.x, v.y)));
+        const geometry = new THREE.ShapeGeometry(shape);
+        const material = new THREE.MeshBasicMaterial({ color: 0xffa500, side: THREE.DoubleSide });
+        return new THREE.Mesh(geometry, material);
+      }
+      copy() {
+        return new PolygonStructure(this.vertices);
+      }
+      remove() {
+        scene.remove(this.mesh);
+      }
+    }
+
+    let currentvertices = [];
+    let currentpolygon = null;
+    let polygons = [];
+    let replica = null;
+
+    renderer.domElement.addEventListener('click', (event) => {
+      if (replica) {
+        replica = null;
+        return;
+      }
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width * 2 - 1;
+      const y = -(event.clientY - rect.top) / rect.height * 2 + 1;
+      const vector = new THREE.Vector3(x, y, 0).unproject(camera);
+      const point = new THREE.Vector3(vector.x, vector.y, 0);
+
+      currentvertices.push(point);
+
+      const dotgeometry = new THREE.BufferGeometry();
+      dotgeometry.setAttribute('position', new THREE.Float32BufferAttribute([point.x, point.y, point.z], 3));
+      const dotmaterial = new THREE.PointsMaterial({
+        size:
+          5, sizeAttenuation: false, color: 0xff0000
+      });
+      const dot = new THREE.Points(dotgeometry, dotmaterial);
+      scene.add(dot);
+
+      if (currentvertices.length > 1) {
+        const points = [];
+        points.push(currentvertices[currentvertices.length - 2]);
+        points.push(currentvertices[currentvertices.length - 1]);
+
+        const linegeometry = new THREE.BufferGeometry().setFromPoints(points);
+        const linematerial = new THREE.LineBasicMaterial({
+          color:
+            0x00ff00
+        });
+        const line = new THREE.Line(linegeometry, linematerial);
+        scene.add(line);
+      }
+    });
+
+    document.getElementById('completebtn').addEventListener('click',
+      () => {
+        if (currentvertices.length > 2) {
+          currentpolygon = new PolygonStructure(currentvertices);
+          polygons.push(currentpolygon);
+          currentvertices = [];
+        }
+      });
+
+    document.getElementById('copybtn').addEventListener('click', () => {
+      if (currentpolygon) {
+        replica = currentpolygon.copy();
+      }
+    });
+
+    renderer.domElement.addEventListener('mousemove', (event) => {
+      if (replica) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / rect.width * 2 - 1;
+        const y = -(event.clientY - rect.top) / rect.height * 2 + 1;
+
+        const vector = new THREE.Vector3(x, y,
+          0).unproject(camera);
+        replica.mesh.position.set(vector.x, vector.y, 0);
+      }
+    });
+
+    document.getElementById('resetbtn').addEventListener('click', () => {
+      polygons.forEach(polygon => polygon.remove());
+      polygons = [];
+      currentvertices = [];
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      const aspect = window.innerWidth / window.innerHeight;
+      camera.left = -aspect * 100;
+      camera.right = aspect * 100;
+      camera.top = 100;
+      camera.bottom = -100;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }); 
+  </script>
+</body>
+
+</html>
